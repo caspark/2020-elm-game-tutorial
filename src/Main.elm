@@ -24,7 +24,9 @@ import Dict exposing (Dict)
 import Html exposing (Html, del, div)
 import Html.Attributes exposing (style)
 import Json.Decode as Decode
+import Keyboard exposing (SupportedKey(..))
 import Set exposing (Set)
+import Util exposing (logIf)
 
 
 main : Program () Model Msg
@@ -37,16 +39,11 @@ main =
         }
 
 
-type alias KeyboardState =
-    { keysDown : Set String -- which keys are currently being held down? expected to be used with
-    }
-
-
 type alias Model =
     { rotationSpeed : Float -- how fast should the square spin?
     , rotation : Float -- what's the current rotation of the square?
     , spinningPaused : Bool -- is the square's spinning paused?
-    , keyboard : KeyboardState
+    , keyboard : Keyboard.KeyboardState
     }
 
 
@@ -55,9 +52,7 @@ init _ =
     ( { rotationSpeed = 0.25
       , rotation = 0
       , spinningPaused = False
-      , keyboard =
-            { keysDown = Set.empty
-            }
+      , keyboard = Keyboard.init
       }
     , Cmd.none
     )
@@ -66,45 +61,8 @@ init _ =
 type Msg
     = Frame Float -- float = dt, aka delta time: the amount of time elapsed since the last frame
     | KeyPressed SupportedKey
-    | KeyDowned String
-    | KeyUpped String
-
-
-type SupportedKey
-    = SpaceKey
-    | EnterKey
-    | UnknownKey
-
-
-isKeyNameDown : KeyboardState -> String -> Bool
-isKeyNameDown keyboardState keyName =
-    Set.member keyName keyboardState.keysDown
-
-
-isKeyDown : KeyboardState -> SupportedKey -> Bool
-isKeyDown keyboardState key =
-    isKeyNameDown keyboardState (keyToString key)
-
-
-{-| Whether to log debug information about keyboard key events.
-
-Change this to True if you need to debug your input handling.
-
--}
-shouldLogKeyboardEvents : Bool
-shouldLogKeyboardEvents =
-    True
-
-
-{-| Wrapper around Debug.log that only logs if the provided boolean is True.
--}
-logIf : Bool -> String -> a -> a
-logIf condition msg item =
-    if condition then
-        log msg item
-
-    else
-        item
+    | RawKeyDowned String
+    | RawKeyUpped String
 
 
 {-| Contains the main game update logic.
@@ -127,7 +85,7 @@ updateFrame model dt =
             if model.spinningPaused then
                 0
 
-            else if isKeyDown model.keyboard EnterKey then
+            else if Keyboard.isKeyDown model.keyboard EnterKey then
                 model.rotationSpeed / 4
 
             else
@@ -145,32 +103,18 @@ update msg model =
                     updateFrame model deltaTime
 
                 KeyPressed key ->
-                    case logIf shouldLogKeyboardEvents "update: Key was pressed" key of
+                    case Keyboard.logKeyboardEvent "Key was pressed" key of
                         SpaceKey ->
                             { model | spinningPaused = not model.spinningPaused }
 
                         _ ->
                             model
 
-                KeyDowned keyName ->
-                    let
-                        keyboard =
-                            model.keyboard
+                RawKeyDowned keyName ->
+                    { model | keyboard = Keyboard.handleKeyDowned model.keyboard keyName }
 
-                        loggedKeyName =
-                            logIf (shouldLogKeyboardEvents && not (isKeyNameDown keyboard keyName)) "update: Key is now down" (stringToKey keyName)
-                    in
-                    { model | keyboard = { keyboard | keysDown = Set.insert keyName keyboard.keysDown } }
-
-                KeyUpped keyName ->
-                    let
-                        keyboard =
-                            model.keyboard
-
-                        loggedKeyName =
-                            logIf shouldLogKeyboardEvents "update: Key is now up" (stringToKey keyName)
-                    in
-                    { model | keyboard = { keyboard | keysDown = Set.remove keyName keyboard.keysDown } }
+                RawKeyUpped keyName ->
+                    { model | keyboard = Keyboard.handleKeyUpped model.keyboard keyName }
     in
     ( updatedModel, Cmd.none )
 
@@ -179,50 +123,10 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ onAnimationFrameDelta Frame
-        , onKeyPress (Decode.map KeyPressed keyDecoder)
-        , onKeyDown (Decode.map KeyDowned (Decode.field "key" Decode.string))
-        , onKeyUp (Decode.map KeyUpped (Decode.field "key" Decode.string))
+        , onKeyPress (Decode.map KeyPressed Keyboard.decodeKeyEventToSupportedKey)
+        , onKeyDown (Decode.map RawKeyDowned Keyboard.decodeKeyEventToKeyName)
+        , onKeyUp (Decode.map RawKeyUpped Keyboard.decodeKeyEventToKeyName)
         ]
-
-
-keyDecoder : Decode.Decoder SupportedKey
-keyDecoder =
-    Decode.map stringToKey (Decode.field "key" Decode.string)
-
-
-keyNamesToKeys : Dict String SupportedKey
-keyNamesToKeys =
-    Dict.fromList
-        [ ( " ", SpaceKey )
-        , ( "Enter", EnterKey )
-        ]
-
-
-keyToString : SupportedKey -> String
-keyToString key =
-    -- because Elm _insists_ on not having any user-implementable typeclasses and also doesn't
-    -- implement the `comparable` typeclass for us, we can't actually define equality for our
-    -- `SupportedKey` type, which means we can't just look up the reverse of keyNamesToKeys to
-    -- figure out what the string representation for a given SupportedKey is. So all keys need to be
-    -- entered twice :(
-    case key of
-        SpaceKey ->
-            " "
-
-        EnterKey ->
-            "Enter"
-
-        _ ->
-            "unknown key"
-
-
-stringToKey : String -> SupportedKey
-stringToKey rawKey =
-    let
-        maybeParsedKey =
-            Dict.get rawKey keyNamesToKeys
-    in
-    Maybe.withDefault UnknownKey maybeParsedKey
 
 
 width : number
