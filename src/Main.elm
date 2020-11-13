@@ -39,20 +39,55 @@ main =
         }
 
 
+width : number
+width =
+    800
+
+
+height : number
+height =
+    600
+
+
+centerX : Float
+centerX =
+    width / 2
+
+
+centerY : Float
+centerY =
+    height / 2
+
+
+shipRotationSpeed : Float
+shipRotationSpeed =
+    -- expressed in radians, picked by trial and error
+    (Basics.pi / 2) / 200
+
+
+type alias Ship =
+    { rotation : Float
+    , position : ( Float, Float )
+    }
+
+
+initShip : Ship
+initShip =
+    { rotation = 0
+    , position = ( centerX, centerY )
+    }
+
+
 type alias Model =
-    { rotationSpeed : Float -- how fast should the square spin?
-    , rotation : Float -- what's the current rotation of the square?
-    , spinningPaused : Bool -- is the square's spinning paused?
-    , keyboard : Keyboard.KeyboardState
+    { keyboard : Keyboard.KeyboardState
+    , ship : Ship
     }
 
 
 init : flags -> ( Model, Cmd msg )
 init _ =
-    ( { rotationSpeed = 0.25
-      , rotation = 0
-      , spinningPaused = False
-      , keyboard = Keyboard.init
+    ( { keyboard = Keyboard.init
+      , ship = initShip
       }
     , Cmd.none
     )
@@ -81,17 +116,30 @@ character run slower on a slow computer than a fast computer.
 updateFrame : Model -> Float -> Model
 updateFrame model dt =
     let
-        adjustedRotationSpeed =
-            if model.spinningPaused then
-                0
+        isKeyDown =
+            -- convenience function to avoid having to pass in model.keyboard all the time
+            Keyboard.isKeyDown model.keyboard
 
-            else if Keyboard.isKeyDown model.keyboard EnterKey then
-                model.rotationSpeed / 4
+        newShip =
+            let
+                ship =
+                    model.ship
 
-            else
-                model.rotationSpeed
+                newRotSpeed =
+                    if isKeyDown LeftKey then
+                        shipRotationSpeed
+
+                    else if isKeyDown RightKey then
+                        -shipRotationSpeed
+
+                    else
+                        0
+            in
+            { ship | rotation = log "new rotation is" (ship.rotation + newRotSpeed * dt) }
     in
-    { model | rotation = model.rotation + adjustedRotationSpeed * dt }
+    { model
+        | ship = newShip
+    }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -104,9 +152,6 @@ update msg model =
 
                 KeyPressed key ->
                     case Keyboard.logKeyboardEvent "Key was pressed" key of
-                        SpaceKey ->
-                            { model | spinningPaused = not model.spinningPaused }
-
                         _ ->
                             model
 
@@ -129,26 +174,6 @@ subscriptions model =
         ]
 
 
-width : number
-width =
-    800
-
-
-height : number
-height =
-    600
-
-
-centerX : Float
-centerX =
-    width / 2
-
-
-centerY : Float
-centerY =
-    height / 2
-
-
 view : Model -> Html Msg
 view model =
     div
@@ -160,41 +185,35 @@ view model =
             ( width, height )
             [ style "border" "10px solid rgba(0,0,0,0.1)" ]
             [ clearScreen
-            , render model
+            , renderShip model.ship
             ]
         ]
 
 
 clearScreen : Canvas.Renderable
 clearScreen =
-    shapes [ fill Color.white ] [ rect ( 0, 0 ) width height ]
+    shapes [ fill Color.black ] [ rect ( 0, 0 ) width height ]
 
 
-render : Model -> Canvas.Renderable
-render model =
+renderShip : Ship -> Canvas.Renderable
+renderShip ship =
     let
         rectSize =
-            width / 3
+            100
 
-        x =
-            -(rectSize / 2)
-
-        y =
-            -(rectSize / 2)
+        ( x, y ) =
+            ship.position
 
         rotation =
-            degrees model.rotation
-
-        hue =
-            toFloat (model.rotation / 4 |> floor |> modBy 100) / 100
+            ship.rotation
     in
-    -- Read the elm-canvas docs to understand how to use `shapes`:
-    -- https://package.elm-lang.org/packages/joakin/elm-canvas/latest/
     shapes
         [ transform
-            [ translate centerX centerY
+            [ translate x y
             , rotate rotation
+            , translate (-rectSize / 2) (-rectSize / 2)
             ]
-        , fill (Color.hsl hue 0.3 0.7)
+        , fill
+            (Color.rgb 255 255 255)
         ]
-        [ rect ( x, y ) rectSize rectSize ]
+        [ rect ( 0, 0 ) rectSize rectSize ]

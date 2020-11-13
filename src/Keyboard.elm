@@ -82,7 +82,10 @@ decodeKeyEventToKeyName =
 
 type SupportedKey
     = SpaceKey
-    | EnterKey
+    | UpKey
+    | DownKey
+    | LeftKey
+    | RightKey
     | UnknownKey
 
 
@@ -90,7 +93,10 @@ keyNamesToKeys : Dict String SupportedKey
 keyNamesToKeys =
     Dict.fromList
         [ ( " ", SpaceKey )
-        , ( "Enter", EnterKey )
+        , ( "ArrowUp", UpKey )
+        , ( "ArrowDown", DownKey )
+        , ( "ArrowLeft", LeftKey )
+        , ( "ArrowRight", RightKey )
         ]
 
 
@@ -105,8 +111,17 @@ keyToString key =
         SpaceKey ->
             " "
 
-        EnterKey ->
-            "Enter"
+        UpKey ->
+            "ArrowUp"
+
+        DownKey ->
+            "ArrowDown"
+
+        LeftKey ->
+            "ArrowLeft"
+
+        RightKey ->
+            "ArrowRight"
 
         _ ->
             "unknown key"
