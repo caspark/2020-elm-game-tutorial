@@ -15,8 +15,8 @@ module Main exposing (..)
 import Browser
 import Browser.Events exposing (onAnimationFrameDelta, onKeyDown, onKeyPress, onKeyUp)
 import Browser.Navigation exposing (Key)
-import Canvas exposing (rect, shapes)
-import Canvas.Settings exposing (fill)
+import Canvas
+import Canvas.Settings as CRender
 import Canvas.Settings.Advanced exposing (rotate, transform, translate)
 import Color
 import Debug exposing (log)
@@ -127,10 +127,10 @@ updateFrame model dt =
 
                 newRotSpeed =
                     if isKeyDown LeftKey then
-                        shipRotationSpeed
+                        -shipRotationSpeed
 
                     else if isKeyDown RightKey then
-                        -shipRotationSpeed
+                        shipRotationSpeed
 
                     else
                         0
@@ -184,22 +184,29 @@ view model =
         [ Canvas.toHtml
             ( width, height )
             [ style "border" "10px solid rgba(0,0,0,0.1)" ]
-            [ clearScreen
-            , renderShip model.ship
-            ]
+            (List.concat
+                [ renderStarfield
+                , renderShip model.ship
+                ]
+            )
         ]
 
 
-clearScreen : Canvas.Renderable
-clearScreen =
-    shapes [ fill Color.black ] [ rect ( 0, 0 ) width height ]
+renderStarfield : List Canvas.Renderable
+renderStarfield =
+    [ -- for now, the vastness of space is dark and empty
+      Canvas.shapes [ CRender.fill Color.black ] [ Canvas.rect ( 0, 0 ) width height ]
+    ]
 
 
-renderShip : Ship -> Canvas.Renderable
+renderShip : Ship -> List Canvas.Renderable
 renderShip ship =
     let
-        rectSize =
-            100
+        h =
+            50
+
+        w =
+            h / 2
 
         ( x, y ) =
             ship.position
@@ -207,13 +214,25 @@ renderShip ship =
         rotation =
             ship.rotation
     in
-    shapes
+    [ Canvas.shapes
         [ transform
             [ translate x y
             , rotate rotation
-            , translate (-rectSize / 2) (-rectSize / 2)
+            , translate (-w / 2) (-h / 2)
             ]
-        , fill
+        , CRender.fill
             (Color.rgb 255 255 255)
         ]
-        [ rect ( 0, 0 ) rectSize rectSize ]
+        [ triangle ( 0, 0 ) w h
+        ]
+    ]
+
+
+triangle : ( Float, Float ) -> Float -> Float -> Canvas.Shape
+triangle ( x, y ) w h =
+    Canvas.path ( 0, 0 )
+        [ Canvas.moveTo ( w / 2, 0 )
+        , Canvas.lineTo
+            ( w, h )
+        , Canvas.lineTo ( 0, h )
+        ]
