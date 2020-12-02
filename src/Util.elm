@@ -13,3 +13,8 @@ logIf condition msg item =
 
     else
         item
+
+
+map2Tuple : (a -> b) -> ( a, a ) -> ( b, b )
+map2Tuple f t =
+    Tuple.mapBoth f f t

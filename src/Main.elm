@@ -25,6 +25,7 @@ import Html exposing (Html, del, div)
 import Html.Attributes exposing (style)
 import Json.Decode as Decode
 import Keyboard exposing (SupportedKey(..))
+import Math exposing (clamp, clamp2Tuple, wrap)
 import Set exposing (Set)
 import Util exposing (logIf)
 
@@ -65,16 +66,33 @@ shipRotationSpeed =
     (Basics.pi / 2) / 200
 
 
+shipThrustSpeed : Float
+shipThrustSpeed =
+    0.07
+
+
+shipDrag : Float
+shipDrag =
+    0.98
+
+
+shipMaxSpeed : Float
+shipMaxSpeed =
+    1
+
+
 type alias Ship =
     { rotation : Float
     , position : ( Float, Float )
+    , velocity : ( Float, Float )
     }
 
 
 initShip : Ship
 initShip =
-    { rotation = 0
+    { rotation = Basics.pi * 3 / 2
     , position = ( centerX, centerY )
+    , velocity = ( 0, 0 )
     }
 
 
@@ -134,8 +152,39 @@ updateFrame model dt =
 
                     else
                         0
+
+                ( x, y ) =
+                    ship.position
+
+                ( vx, vy ) =
+                    ship.velocity
+
+                newVelocity =
+                    Math.clamp2Tuple
+                        ( -shipMaxSpeed
+                        , shipMaxSpeed
+                        )
+                        (if isKeyDown UpKey then
+                            ( vx + shipThrustSpeed * Basics.cos ship.rotation, vy + shipThrustSpeed * Basics.sin ship.rotation )
+
+                         else
+                            ( vx * shipDrag, vy * shipDrag )
+                        )
+
+                newPosition =
+                    let
+                        ( newX, newY ) =
+                            ( x + vx * dt, y + vy * dt )
+                    in
+                    ( wrap ( 0, width ) newX
+                    , wrap ( 0, height ) newY
+                    )
             in
-            { ship | rotation = log "new rotation is" (ship.rotation + newRotSpeed * dt) }
+            { ship
+                | rotation = ship.rotation + newRotSpeed * dt
+                , position = newPosition
+                , velocity = newVelocity
+            }
     in
     { model
         | ship = newShip
@@ -217,7 +266,7 @@ renderShip ship =
     [ Canvas.shapes
         [ transform
             [ translate x y
-            , rotate rotation
+            , rotate (rotation + Basics.pi / 2)
             , translate (-w / 2) (-h / 2)
             ]
         , CRender.fill
