@@ -81,6 +81,11 @@ shipMaxSpeed =
     1
 
 
+bulletStartingSpeed : Float
+bulletStartingSpeed =
+    1
+
+
 type alias Ship =
     { rotation : Float
     , position : ( Float, Float )
@@ -96,9 +101,21 @@ initShip =
     }
 
 
+type alias Bullet =
+    { position : ( Float, Float )
+    , velocity : ( Float, Float )
+    }
+
+
+initBullets : List Bullet
+initBullets =
+    []
+
+
 type alias Model =
     { keyboard : Keyboard.KeyboardState
     , ship : Ship
+    , bullets : List Bullet
     }
 
 
@@ -106,6 +123,7 @@ init : flags -> ( Model, Cmd msg )
 init _ =
     ( { keyboard = Keyboard.init
       , ship = initShip
+      , bullets = []
       }
     , Cmd.none
     )
@@ -116,6 +134,42 @@ type Msg
     | KeyPressed SupportedKey
     | RawKeyDowned String
     | RawKeyUpped String
+
+
+spawnBullet : Ship -> Bullet
+spawnBullet ship =
+    let
+        ( svx, svy ) =
+            ship.velocity
+    in
+    Bullet ship.position
+        ( svx + bulletStartingSpeed * Basics.cos ship.rotation, svy + bulletStartingSpeed * Basics.sin ship.rotation )
+
+
+updateBullet : Bullet -> Float -> Bullet
+updateBullet bullet dt =
+    let
+        ( x, y ) =
+            bullet.position
+
+        ( vx, vy ) =
+            bullet.velocity
+
+        newPosition =
+            let
+                ( newX, newY ) =
+                    ( x + vx * dt, y + vy * dt )
+            in
+            ( wrap ( 0, width ) newX
+            , wrap ( 0, height ) newY
+            )
+    in
+    Bullet newPosition
+        bullet.velocity
+
+
+type alias KeyDownFunc =
+    SupportedKey -> Bool
 
 
 {-| Contains the main game update logic.
@@ -185,9 +239,13 @@ updateFrame model dt =
                 , position = newPosition
                 , velocity = newVelocity
             }
+
+        newBullets =
+            List.map (\b -> updateBullet b dt) model.bullets
     in
     { model
         | ship = newShip
+        , bullets = newBullets
     }
 
 
@@ -201,6 +259,9 @@ update msg model =
 
                 KeyPressed key ->
                     case Keyboard.logKeyboardEvent "Key was pressed" key of
+                        SpaceKey ->
+                            { model | bullets = spawnBullet model.ship :: model.bullets }
+
                         _ ->
                             model
 
@@ -236,6 +297,7 @@ view model =
             (List.concat
                 [ renderStarfield
                 , renderShip model.ship
+                , renderBullets model.bullets
                 ]
             )
         ]
@@ -284,4 +346,28 @@ triangle ( x, y ) w h =
         , Canvas.lineTo
             ( w, h )
         , Canvas.lineTo ( 0, h )
+        ]
+
+
+renderBullets : List Bullet -> List Canvas.Renderable
+renderBullets bullets =
+    List.map renderBullet bullets
+
+
+renderBullet : Bullet -> Canvas.Renderable
+renderBullet bullet =
+    let
+        radius =
+            5
+
+        ( x, y ) =
+            bullet.position
+    in
+    Canvas.shapes
+        [ CRender.fill
+            (Color.rgb 255 0 0)
+        ]
+        [ Canvas.circle
+            ( x, y )
+            radius
         ]
